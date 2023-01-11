@@ -67,6 +67,12 @@ def retrieve_data_from_tws() -> pd.DataFrame:
             "total_daily_volume_y": "total_daily_volume_prev_day",
         }
     )
+    for i in range(len(barsDf)):
+        for prev_row in range(i - 1, -1, -1):
+            if barsDf.iloc[prev_row]["time"] == barsDf.iloc[i]["time"]:
+                barsDf.at[i, "prev_day_volume"] = barsDf.at[prev_row, "volume"]
+                break
+
     barsDf = barsDf[
         [
             "nterm",
@@ -74,6 +80,7 @@ def retrieve_data_from_tws() -> pd.DataFrame:
             "time",
             "price",
             "volume",
+            "prev_day_volume",
             "total_daily_volume_prev_day",
             "yesterday_close",
             "flat_delta_px_prev_bar",
@@ -96,10 +103,10 @@ def retrieve_data_from_csv() -> pd.DataFrame:
 
 def main():
     # df = retrieve_data_from_tws() # Uncomment to get data from TWS
-    # dump_df_to_csv(df) # Uncomment to save the data
     df = (
         retrieve_data_from_csv()
     )  # Uncomment to get the data saved to a file to save the query
+    # dump_df_to_csv(df)  # Uncomment to save the data
 
-    print(df.head(100))
-    print(df.tail(100))
+    print(df.head(50))
+    print(df.tail(50))
