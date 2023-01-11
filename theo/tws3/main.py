@@ -2,23 +2,24 @@ from ib_insync import *
 from contracts import contracts
 from datetime import datetime
 import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
+import os
 
 
 def get_date() -> str:
     return datetime.now().strftime("%Y%m%d-00:00:00")
 
 
-def retrieve_data_from_tws() -> pd.DataFrame:
-    ib = IB()
-    ib.connect()
-    ib.reqMarketDataType(3)
-
+def get_data_from_tws(ib: IB, contract: Contract, durationStr: str) -> pd.DataFrame:
     contract = contracts[0]
 
     bars = ib.reqHistoricalData(
         contract,
         endDateTime=get_date(),
-        durationStr="91 D",
+        durationStr=durationStr,
         barSizeSetting="10 mins",
         whatToShow="TRADES",
         useRTH=True,
@@ -29,6 +30,10 @@ def retrieve_data_from_tws() -> pd.DataFrame:
     if barsDf is None:
         print("No data received")
         exit(1)
+    return barsDf
+
+
+def prepare_data_from_tws(barsDf: pd.DataFrame) -> pd.DataFrame:
     #                           date   open   high    low  close  volume  average  barCount
     # 0    2022-09-05 15:50:00+01:00  86.39  86.39  86.39  86.39     1.0   86.390         1
     barsDf["time"] = barsDf["date"].dt.time
@@ -89,6 +94,19 @@ def retrieve_data_from_tws() -> pd.DataFrame:
             "percent_delta_px_close",
         ]
     ]
+    barsDf["flat_delta_px_next_bar"] = barsDf["flat_delta_px_prev_bar"].shift(-1)
+    barsDf["percent_delta_px_next_bar"] = barsDf["percent_delta_px_prev_bar"].shift(-1)
+    barsDf["flat_delta_px_close_plus_one"] = barsDf["flat_delta_px_close"].shift(-1)
+    barsDf["percent_delta_px_close_plus_one"] = barsDf["percent_delta_px_close"].shift(
+        -1
+    )
+    barsDf["flat_delta_volume_prev_day"] = barsDf["volume"] - barsDf["prev_day_volume"]
+    barsDf["percent_delta_volume_prev_day"] = (
+        barsDf["flat_delta_volume_prev_day"] / barsDf["prev_day_volume"]
+    )
+    barsDf["percent_prev_daily_volume"] = (
+        barsDf["volume"] - barsDf["total_daily_volume_prev_day"]
+    ) / barsDf["total_daily_volume_prev_day"]
     return barsDf
 
 
@@ -101,12 +119,62 @@ def retrieve_data_from_csv() -> pd.DataFrame:
     return df
 
 
-def main():
-    # df = retrieve_data_from_tws() # Uncomment to get data from TWS
-    df = (
-        retrieve_data_from_csv()
-    )  # Uncomment to get the data saved to a file to save the query
-    # dump_df_to_csv(df)  # Uncomment to save the data
+def apply_regression(df: pd.DataFrame):
+    df.drop(["date"], axis=1, inplace=True)
+    df["average_price_15"] = df["close"].rolling(window=15).mean()
+    df.dropna(inplace=True)
 
-    print(df.head(50))
-    print(df.tail(50))
+    df["close_plus_one"] = df["close"].shift(-1)
+    df.dropna(inplace=True)
+
+    # split data into input and target
+    X = df[["open", "high", "low", "average_price_15", "volume", "close"]]
+    y = df["close_plus_one"]
+
+    # Split the data into training and test sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+    # Train the linear regression model
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+
+    # Make predictions on the test set
+    y_pred = model.predict(X_test)
+
+    print(y_pred)
+    print(y_test)
+
+    # Evaluate the model
+    mae = mean_absolute_error(y_test, y_pred)
+    mse = mean_squared_error(y_test, y_pred)
+    print(f"MAE: {mae}, MSE: {mse}")
+
+
+def main():
+    ib = IB()
+    ib.connect()
+    ib.reqMarketDataType(3)
+
+    durationStrs = ["11 D", "31 D", "91 D"]
+    durationStrsSheets = ["10-days", "30-days", "90-days"]
+
+    for contract in contracts:
+        contractName = ib.reqContractDetails(contract)[0].marketName
+        print(f"Processing {contractName}")
+        bars = [
+            prepare_data_from_tws(get_data_from_tws(ib, contract, durationStr))
+            for durationStr in durationStrs
+        ]
+        # create a directory named contractName
+        if not os.path.exists(f"./outputs/{contractName}"):
+            os.mkdir(f"./outputs/{contractName}")
+        with pd.ExcelWriter(f"./outputs/{contractName}/spreadsheet.xlsx") as writer:
+            for i, bar in enumerate(bars):
+                bar.to_excel(writer, sheet_name=durationStrsSheets[i], index=False)
+
+        with pd.ExcelWriter(f"./outputs/{contractName}/correlations.xlsx") as writer:
+            for i, bar in enumerate(bars):
+                corr_matrix = bar.corr()
+                corr_matrix.to_excel(writer, sheet_name=durationStrsSheets[i])
+
+        print(f"Finished processing {contractName}")
