@@ -1,13 +1,14 @@
 from ib_insync import *
 from contracts import contracts
 from datetime import datetime
+import pandas as pd
 
 
 def get_date() -> str:
     return datetime.now().strftime("%Y%m%d-00:00:00")
 
 
-def main():
+def retrieve_data_from_tws() -> pd.DataFrame:
     ib = IB()
     ib.connect()
     ib.reqMarketDataType(3)
@@ -27,21 +28,79 @@ def main():
 
     if barsDf is None:
         print("No data received")
-        return
-    #                          date   open   high    low  close  volume  average  barCount
+        exit(1)
+    #                           date   open   high    low  close  volume  average  barCount
     # 0    2022-09-05 15:50:00+01:00  86.39  86.39  86.39  86.39     1.0   86.390         1
     barsDf["time"] = barsDf["date"].dt.time
     barsDf["date"] = barsDf["date"].dt.date
+    barsDf.rename(columns={"close": "price"}, inplace=True)
+    barsDf = barsDf[barsDf["time"] <= datetime.strptime("16:00:00", "%H:%M:%S").time()]
+    barsDf = barsDf[
+        barsDf["time"] >= datetime.strptime("9:30:00", "%H:%M:%S").time()
+    ].reset_index(drop=True)
+    barsDf["nterm"] = barsDf.index
     barsDf = barsDf[
         [
+            "nterm",
             "date",
             "time",
-            "close",
+            "price",
             "volume",
         ]
     ]
-    barsDf.rename(columns={"close": "price"}, inplace=True)
-    barsDf = barsDf[barsDf["time"] <= datetime.strptime("16:00:00", "%H:%M:%S").time()]
-    barsDf = barsDf[barsDf["time"] >= datetime.strptime("9:30:00", "%H:%M:%S").time()]
-    print(len(barsDf))
-    # barsDf.to_csv("./outputs/bars.csv", index=True)
+    barsDf["total_daily_volume"] = barsDf.groupby("date")["volume"].transform("sum")
+    barsDf = barsDf.merge(
+        barsDf.groupby("date")["price"].last().shift(1), on="date"
+    ).rename(columns={"price_y": "yesterday_close", "price_x": "price"})
+    barsDf["flat_delta_px_prev_bar"] = barsDf["price"] - barsDf["price"].shift(1)
+    barsDf["percent_delta_px_prev_bar"] = (
+        barsDf["flat_delta_px_prev_bar"] / barsDf["price"].shift(1) * 100
+    )
+    barsDf["flat_delta_px_close"] = barsDf["price"] - barsDf["yesterday_close"]
+    barsDf["percent_delta_px_close"] = (
+        barsDf["flat_delta_px_close"] / barsDf["yesterday_close"] * 100
+    )
+    barsDf = barsDf.merge(
+        barsDf.groupby("date")["total_daily_volume"].first().shift(1), on="date"
+    ).rename(
+        columns={
+            "total_daily_volume_y": "total_daily_volume_prev_day",
+        }
+    )
+    barsDf = barsDf[
+        [
+            "nterm",
+            "date",
+            "time",
+            "price",
+            "volume",
+            "total_daily_volume_prev_day",
+            "yesterday_close",
+            "flat_delta_px_prev_bar",
+            "percent_delta_px_prev_bar",
+            "flat_delta_px_close",
+            "percent_delta_px_close",
+        ]
+    ]
+    return barsDf
+
+
+def dump_df_to_csv(df: pd.DataFrame) -> None:
+    df.to_csv("./outputs/bars.csv", index=False)
+
+
+def retrieve_data_from_csv() -> pd.DataFrame:
+    df = pd.read_csv("./outputs/bars.csv")
+    return df
+
+
+def main():
+    # df = retrieve_data_from_tws()
+    # dump_df_to_csv(df)
+    df = retrieve_data_from_csv()
+
+    # df.to_csv("./outputs/bars.csv", index=False)
+
+    print(df.head(100))
+    print(df.tail(100))
+    # print(df.groupby("date")["price"].last().shift(1))
