@@ -95,12 +95,11 @@ def retrieve_data_from_csv() -> pd.DataFrame:
 
 
 def main():
-    # df = retrieve_data_from_tws()
-    # dump_df_to_csv(df)
-    df = retrieve_data_from_csv()
-
-    # df.to_csv("./outputs/bars.csv", index=False)
+    # df = retrieve_data_from_tws() # Uncomment to get data from TWS
+    # dump_df_to_csv(df) # Uncomment to save the data
+    df = (
+        retrieve_data_from_csv()
+    )  # Uncomment to get the data saved to a file to save the query
 
     print(df.head(100))
     print(df.tail(100))
-    # print(df.groupby("date")["price"].last().shift(1))
