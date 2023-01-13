@@ -172,14 +172,5 @@ def main():
         if corr > 0.15:
             print(f"Threshold: {i}, Correlation: {corr}, Values: {len(df4)}")
 
-    print("--- Percent Delta Volume Prev Bar ---")
-    for i in range(200):
-        df2 = df[df["percent_delta_volume_prev_bar"].abs() > i]
-        corr = df2[
-            ["percent_delta_volume_prev_bar", "percent_delta_px_next_bar"]
-        ].corr()["percent_delta_volume_prev_bar"]["percent_delta_px_next_bar"]
-        if corr > 0.15:
-            print(f"Threshold: {i}, Correlation: {corr}, Values: {len(df2)}")
-
     # print(df.head(40))
     # print(df.tail(40))
