@@ -1,0 +1,28 @@
+# Information
+You'll find in the `outputs` folder the following files for each security:
+- `spreadsheet.xlsx`: the spreadsheet with the data for the past 10, 30 and 90 days
+    - **And here is the leged for the spreadsheets:**
+    - `nterm`: _self-explanatory_
+    - `date`: _self-explanatory_
+    - `time`: _self-explanatory_
+    - `price`: close price
+    - `volume`: _self-explanatory_
+    - `prev_day_volume`: the volume at the same time on the previous trading day
+    - `total_daily_volume_prev_day`: the total volume for the previous trading day
+    - `yesterday_close`: _self-explanatory_
+    - `flat_delta_px_prev_bar`: the nominal price difference between open/close in this bar
+    - `percent_delta_px_prev_bar`: the percentage price difference between open/close in this bar
+    - `flat_delta_px_close`: the nominal price difference between this bar's close and the previous day's close
+    - `percent_delta_px_close`: the percentage price difference between this bar's close and the previous day's close
+    - `flat_delta_px_next_bar`: the nominal price difference with the next bar (used for forecasts)
+    - `percent_delta_px_next_bar`: the percentage price difference with the next bar (used for forecasts)
+    - `flat_delta_px_close_plus_one`: the nominal price difference between the next bar and the daily close (used for forecasts)
+    - `percent_delta_px_close_plus_one`: the percentage price difference between the next bar and the daily close (used for forecasts)
+    - `flat_delta_volume_prev_day`: the nominal volume difference with the previous trading day's volume at the same time
+    - `percent_delta_volume_prev_day`: the percentage volume difference with the previous trading day's volume at the same time
+    - `percent_prev_daily_volume`: this bars volume size compared to the total daily volume from the previous day
+    - `average_volume`: _self-explanatory_
+    - `ema_5`: _self-explanatory_
+    - `ema_20`: _self-explanatory_
+- `correlation.xlsx`: the spreadsheet with correlation data for the past 10, 30 and 90 days (used by me during research phase)
+- `orders.csv`: the orders to be executed yesterday (if any), most of them are probably empty
