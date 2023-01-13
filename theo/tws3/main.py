@@ -2,11 +2,8 @@ from ib_insync import *
 from contracts import contracts
 from datetime import datetime
 import pandas as pd
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import train_test_split
 import os
+import numpy as np
 
 
 def get_date() -> str:
@@ -103,54 +100,14 @@ def prepare_data_from_tws(barsDf: pd.DataFrame) -> pd.DataFrame:
     barsDf["flat_delta_volume_prev_day"] = barsDf["volume"] - barsDf["prev_day_volume"]
     barsDf["percent_delta_volume_prev_day"] = (
         barsDf["flat_delta_volume_prev_day"] / barsDf["prev_day_volume"]
-    )
+    ) * 100
     barsDf["percent_prev_daily_volume"] = (
-        barsDf["volume"] - barsDf["total_daily_volume_prev_day"]
-    ) / barsDf["total_daily_volume_prev_day"]
+        (barsDf["volume"]) / barsDf["total_daily_volume_prev_day"] * 100
+    )
     return barsDf
 
 
-def dump_df_to_csv(df: pd.DataFrame) -> None:
-    df.to_csv("./outputs/bars.csv", index=False)
-
-
-def retrieve_data_from_csv() -> pd.DataFrame:
-    df = pd.read_csv("./outputs/bars.csv")
-    return df
-
-
-def apply_regression(df: pd.DataFrame):
-    df.drop(["date"], axis=1, inplace=True)
-    df["average_price_15"] = df["close"].rolling(window=15).mean()
-    df.dropna(inplace=True)
-
-    df["close_plus_one"] = df["close"].shift(-1)
-    df.dropna(inplace=True)
-
-    # split data into input and target
-    X = df[["open", "high", "low", "average_price_15", "volume", "close"]]
-    y = df["close_plus_one"]
-
-    # Split the data into training and test sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-
-    # Train the linear regression model
-    model = LinearRegression()
-    model.fit(X_train, y_train)
-
-    # Make predictions on the test set
-    y_pred = model.predict(X_test)
-
-    print(y_pred)
-    print(y_test)
-
-    # Evaluate the model
-    mae = mean_absolute_error(y_test, y_pred)
-    mse = mean_squared_error(y_test, y_pred)
-    print(f"MAE: {mae}, MSE: {mse}")
-
-
-def main():
+def retrieve_and_store_data_in_excel() -> None:
     ib = IB()
     ib.connect()
     ib.reqMarketDataType(3)
@@ -178,3 +135,51 @@ def main():
                 corr_matrix.to_excel(writer, sheet_name=durationStrsSheets[i])
 
         print(f"Finished processing {contractName}")
+
+
+def get_data_from_excel(name: str) -> pd.DataFrame:
+    return pd.read_excel(f"./outputs/{name}/spreadsheet.xlsx", sheet_name="90-days")
+
+
+def main():
+    # retrieve_and_store_data_in_excel()
+    df = get_data_from_excel("CL")
+
+    df["abs_percent_prev_daily_volume"] = df["percent_prev_daily_volume"].abs()
+    df["percent_delta_volume_prev_bar"] = (
+        (df["volume"] - df["volume"].shift(1)) / df["volume"].shift(1) * 100
+    )
+
+    df2 = df[
+        [
+            "abs_percent_prev_daily_volume",
+            "percent_delta_px_next_bar",
+            "percent_prev_daily_volume",
+        ]
+    ]
+
+    print("=== Correlations ===")
+    print("--- Absolute Percent Prev Daily Volume ---")
+    for i in range(200):
+        df3 = df2[df2["abs_percent_prev_daily_volume"] > i]
+        df4 = df3[
+            [
+                "percent_delta_px_next_bar",
+                "percent_prev_daily_volume",
+            ]
+        ]
+        corr = df4.corr()["percent_prev_daily_volume"]["percent_delta_px_next_bar"]
+        if corr > 0.15:
+            print(f"Threshold: {i}, Correlation: {corr}, Values: {len(df4)}")
+
+    print("--- Percent Delta Volume Prev Bar ---")
+    for i in range(200):
+        df2 = df[df["percent_delta_volume_prev_bar"].abs() > i]
+        corr = df2[
+            ["percent_delta_volume_prev_bar", "percent_delta_px_next_bar"]
+        ].corr()["percent_delta_volume_prev_bar"]["percent_delta_px_next_bar"]
+        if corr > 0.15:
+            print(f"Threshold: {i}, Correlation: {corr}, Values: {len(df2)}")
+
+    # print(df.head(40))
+    # print(df.tail(40))
