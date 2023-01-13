@@ -1,2 +1,2 @@
-date,time,order,price
-2023-01-12,15:50:00,SELL,32.95
+date,order,price
+2023-01-12,SELL,32.95
